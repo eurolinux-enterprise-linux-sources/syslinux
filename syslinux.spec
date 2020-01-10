@@ -2,7 +2,7 @@ Summary: Simple kernel loader which boots from a FAT filesystem
 Name: syslinux
 Version: 4.02
 %define tarball_version 4.02
-Release: 9%{?dist}
+Release: 16%{?dist}
 License: GPLv2+
 Group: Applications/System
 URL: http://syslinux.zytor.com/wiki/index.php/The_Syslinux_Project
@@ -11,17 +11,21 @@ Patch0: syslinux-debuginfo.patch
 Patch1: syslinux-4.02-fix-isohybrid-seek-error.patch
 Patch2: syslinux-4.02-coverity.patch
 Patch3: stop-force-int18-hack.patch
+Patch4: 0001-Fix-a-build-error-that-s-been-hiding.patch
+Patch5: 0001-Make-some-more-mingw-paths-work.patch
 ExclusiveArch: %{ix86} x86_64
 Buildroot: %{_tmppath}/%{name}-%{version}-%{release}-root-%(%{__id_u} -n)
 BuildRequires: nasm >= 0.98.38-1, perl, netpbm-progs, git
 BuildRequires: libuuid-devel
 BuildRequires: /usr/include/gnu/stubs-32.h
+BuildRequires: cpio, findutils
 %ifarch %{ix86}
 Requires: mtools, libc.so.6, libuuid
 %endif
 %ifarch x86_64
 Requires: mtools, libc.so.6()(64bit), libuuid
 %endif
+Requires: syslinux-nonlinux
 Obsoletes: syslinux-devel < %{version}-%{release}
 Provides: syslinux-devel
 
@@ -32,8 +36,7 @@ Provides: syslinux-devel
 %description
 SYSLINUX is a suite of bootloaders, currently supporting DOS FAT
 filesystems, Linux ext2/ext3 filesystems (EXTLINUX), PXE network boots
-(PXELINUX), or ISO 9660 CD-ROMs (ISOLINUX).  It also includes a tool,
-MEMDISK, which loads legacy operating systems from these media.
+(PXELINUX), or ISO 9660 CD-ROMs (ISOLINUX).
 
 %package perl
 Summary: Syslinux tools written in perl
@@ -53,6 +56,7 @@ Headers and libraries for syslinux development.
 Summary: The EXTLINUX bootloader, for booting the local system.
 Group: System/Boot
 Requires: syslinux
+Requires: syslinux-extlinux-nonlinux
 
 %description extlinux
 The EXTLINUX bootloader, for booting the local system, as well as all
@@ -62,10 +66,34 @@ the SYSLINUX/PXELINUX modules in /boot.
 Summary: SYSLINUX modules in /tftpboot, available for network booting
 Group: Applications/Internet
 Requires: syslinux
+%ifarch x86_64
+Requires: syslinux-tftpboot(x86-32) = %{version}-%{release}
+%endif
 
 %description tftpboot
 All the SYSLINUX/PXELINUX modules directly available for network
 booting in the /tftpboot directory.
+
+%ifarch %{ix86}
+%package extlinux-nonlinux
+Summary: The parts of the EXTLINUX bootloader which aren't run from linux.
+Group: System/Boot
+Requires: syslinux
+
+%description extlinux-nonlinux
+All the EXTLINUX binaries that run from the firmware rather than
+from a linux host.
+
+%package nonlinux
+Summary: SYSLINUX modules which aren't run from linux.
+Group: System/Boot
+Requires: syslinux
+
+%description nonlinux
+All the SYSLINUX binaries that run from the firmware rather than from a
+linux host. It also includes a tool, MEMDISK, which loads legacy operating
+systems from media. 
+%endif
 
 %prep
 %setup -q -n syslinux-%{tarball_version}
@@ -79,8 +107,11 @@ git am %{patches}
 %build
 CFLAGS="-Werror -Wno-unused -finline-limit=2000"
 export CFLAGS
+
 # If you make clean here, we lose the provided syslinux.exe
-#make clean
+find . -name '*.exe' | cpio -H newc --quiet -o -F %{_tmppath}/%{name}-%{version}-%{release}.cpio
+make clean
+make all
 make installer
 make -C sample tidy
 
@@ -91,6 +122,7 @@ mkdir -p %{buildroot}%{_bindir}
 mkdir -p %{buildroot}%{_sbindir}
 mkdir -p %{buildroot}%{_prefix}/lib/syslinux
 mkdir -p %{buildroot}%{_includedir}
+cat %{_tmppath}/%{name}-%{version}-%{release}.cpio | cpio -di
 make install-all \
 	INSTALLROOT=%{buildroot} BINDIR=%{_bindir} SBINDIR=%{_sbindir} \
        	LIBDIR=%{_prefix}/lib DATADIR=%{_datadir} \
@@ -125,12 +157,6 @@ rm -rf %{buildroot}
 %{_bindir}/memdiskfind
 %{_bindir}/syslinux
 %dir %{_datadir}/syslinux
-%{_datadir}/syslinux/*.com
-%{_datadir}/syslinux/*.exe
-%{_datadir}/syslinux/*.c32
-%{_datadir}/syslinux/*.bin
-%{_datadir}/syslinux/*.0
-%{_datadir}/syslinux/memdisk
 %dir %{_datadir}/syslinux/dosutil
 %{_datadir}/syslinux/dosutil/*
 
@@ -158,11 +184,33 @@ rm -rf %{buildroot}
 
 %files extlinux
 %{_sbindir}/extlinux
-/boot/extlinux
 %config /etc/extlinux.conf
 
 %files tftpboot
+%ifarch %{ix86}
 /tftpboot
+
+%files nonlinux
+%{_datadir}/syslinux/memdisk
+%{_datadir}/syslinux/*.com
+%{_datadir}/syslinux/*.exe
+%{_datadir}/syslinux/*.c32
+%{_datadir}/syslinux/*.bin
+%{_datadir}/syslinux/*.0
+
+%files extlinux-nonlinux
+/boot/extlinux
+
+%else
+%exclude %{_datadir}/syslinux/memdisk
+%exclude %{_datadir}/syslinux/*.com
+%exclude %{_datadir}/syslinux/*.exe
+%exclude %{_datadir}/syslinux/*.c32
+%exclude %{_datadir}/syslinux/*.bin
+%exclude %{_datadir}/syslinux/*.0
+%exclude /boot/extlinux
+%exclude /tftpboot
+%endif
 
 %post extlinux
 # If we have a /boot/extlinux.conf file, assume extlinux is our bootloader
@@ -176,10 +224,38 @@ elif [ -f /boot/extlinux.conf ]; then \
 fi
 
 %changelog
+* Tue Apr 08 2014 Peter Jones <pjones@redhat.com> - 4.02-16
+- Make upgrades of syslinux-tftpboot work on x86_64.
+  Resolves: rhbz#1084547
+
+* Mon Apr 07 2014 Peter Jones <pjones@redhat.com> - 4.02-15
+- Fix requires for syslinux-extlinux -> syslinux-extlinux-nonlinux.
+  Related: rhbz#1084547
+
+* Mon Apr 07 2014 Peter Jones <pjones@redhat.com> - 4.02-14
+- Typo in -13.  This day has gone on too long.
+  Related: rhbz#1084547
+
+* Mon Apr 07 2014 Peter Jones <pjones@redhat.com> - 4.02-13
+- Make memdisk part of syslinux-nonlinux.
+  Related: rhbz#1084547
+
+* Mon Apr 07 2014 Peter Jones <pjones@redhat.com> - 4.02-12
+- Make multilib work right with 4.02-10's changes.
+  Related: rhbz#1084547
+
+* Mon Apr 07 2014 Peter Jones <pjones@redhat.com> - 4.02-11
+- Fix it harder.  Again.
+  Related: rhbz#1084547
+
+* Thu Apr 03 2014 Peter Jones <pjones@redhat.com> - 4.02-10
+- Actually build the part of the code 4.02-9 was supposed to address.
+  Related: rhbz#980671
+
 * Mon Feb 10 2014 Peter Jones <pjones@redhat.com> - 4.02-9
 - Avoid a workaround that causes machines to stall in PXE boots that
   use the local disk.
-  ResolveS:rhbz#980671
+  Resolves: rhbz#980671
 
 * Mon Oct 15 2012 Peter Jones <pjones@redhat.com> - 4.02-8
 - Fix bugs found by coverity scan.
@@ -255,7 +331,7 @@ fi
 - Remove 16bpp patch, hpa says that's there to cover a bug that's fixed.
 - Remove x86_64 patch; building without it works now.
 
-* Tue Feb 21 2008 Peter Jones <pjones@redhat.com> - 3.61-1
+* Thu Feb 21 2008 Peter Jones <pjones@redhat.com> - 3.61-1
 - Update to 3.61 .
 
 * Tue Feb 19 2008 Fedora Release Engineering <rel-eng@fedoraproject.org> - 3.36-9
