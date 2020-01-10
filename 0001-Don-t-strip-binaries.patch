@@ -1,0 +1,42 @@
+From a1f6ed4e9c456a886408b1842d207553565dd35e Mon Sep 17 00:00:00 2001
+From: Peter Jones <pjones@redhat.com>
+Date: Mon, 13 Feb 2012 09:40:34 -0500
+Subject: [PATCH 1/4] Don't strip binaries
+
+Dont' strip binaries; if we want that done, it's rpm's job.
+
+Resolves: rhbz#729013
+---
+ mtools/Makefile | 2 +-
+ utils/Makefile  | 2 +-
+ 2 files changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/mtools/Makefile b/mtools/Makefile
+index 6164d24..cfa22ef 100755
+--- a/mtools/Makefile
++++ b/mtools/Makefile
+@@ -4,7 +4,7 @@ include $(topdir)/MCONFIG
+ OPTFLAGS = -g -Os
+ INCLUDES = -I. -I.. -I../libfat -I../libinstaller
+ CFLAGS	 = $(GCCWARN) -D_FILE_OFFSET_BITS=64 $(OPTFLAGS) $(INCLUDES)
+-LDFLAGS	 = -s
++LDFLAGS	 =
+ 
+ SRCS     = syslinux.c \
+ 	   ../libinstaller/fat.c \
+diff --git a/utils/Makefile b/utils/Makefile
+index 455eb82..46ce12f 100644
+--- a/utils/Makefile
++++ b/utils/Makefile
+@@ -18,7 +18,7 @@ topdir = ..
+ include $(topdir)/MCONFIG
+ 
+ CFLAGS   = $(GCCWARN) -Os -fomit-frame-pointer -D_FILE_OFFSET_BITS=64
+-LDFLAGS  = -O2 -s
++LDFLAGS  = -O2
+ 
+ TARGETS	 = mkdiskimage isohybrid gethostip memdiskfind
+ TARGETS += isohybrid.pl  # about to be obsoleted
+-- 
+1.9.0
+

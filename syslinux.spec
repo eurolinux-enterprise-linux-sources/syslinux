@@ -1,18 +1,16 @@
 Summary: Simple kernel loader which boots from a FAT filesystem
 Name: syslinux
-Version: 4.02
-%define tarball_version 4.02
-Release: 16%{?dist}
+Version: 4.04
+%define tarball_version 4.04
+Release: 3%{?dist}
 License: GPLv2+
 Group: Applications/System
 URL: http://syslinux.zytor.com/wiki/index.php/The_Syslinux_Project
 Source0: http://www.kernel.org/pub/linux/utils/boot/syslinux/%{name}-%{tarball_version}.tar.bz2
-Patch0: syslinux-debuginfo.patch
-Patch1: syslinux-4.02-fix-isohybrid-seek-error.patch
-Patch2: syslinux-4.02-coverity.patch
-Patch3: stop-force-int18-hack.patch
-Patch4: 0001-Fix-a-build-error-that-s-been-hiding.patch
-Patch5: 0001-Make-some-more-mingw-paths-work.patch
+Patch0001: 0001-Don-t-strip-binaries.patch
+Patch0002: 0002-Fix-seek-error-from-isohybrid.patch
+Patch0003: 0003-Fixes-for-problems-discovered-by-coverity-scan.-8120.patch
+Patch0004: 0004-Make-some-more-mingw-paths-work.patch
 ExclusiveArch: %{ix86} x86_64
 Buildroot: %{_tmppath}/%{name}-%{version}-%{release}-root-%(%{__id_u} -n)
 BuildRequires: nasm >= 0.98.38-1, perl, netpbm-progs, git
@@ -62,23 +60,24 @@ Requires: syslinux-extlinux-nonlinux
 The EXTLINUX bootloader, for booting the local system, as well as all
 the SYSLINUX/PXELINUX modules in /boot.
 
+%ifarch %{ix86}
 %package tftpboot
-Summary: SYSLINUX modules in /tftpboot, available for network booting
+Summary: SYSLINUX modules in /var/lib/tftpboot, available for network booting
 Group: Applications/Internet
+BuildArch: noarch
+ExclusiveArch: %{ix86} x86_64
 Requires: syslinux
-%ifarch x86_64
-Requires: syslinux-tftpboot(x86-32) = %{version}-%{release}
-%endif
 
 %description tftpboot
 All the SYSLINUX/PXELINUX modules directly available for network
-booting in the /tftpboot directory.
+booting in the /var/lib/tftpboot directory.
 
-%ifarch %{ix86}
 %package extlinux-nonlinux
 Summary: The parts of the EXTLINUX bootloader which aren't run from linux.
 Group: System/Boot
 Requires: syslinux
+BuildArch: noarch
+ExclusiveArch: %{ix86} x86_64
 
 %description extlinux-nonlinux
 All the EXTLINUX binaries that run from the firmware rather than
@@ -88,11 +87,13 @@ from a linux host.
 Summary: SYSLINUX modules which aren't run from linux.
 Group: System/Boot
 Requires: syslinux
+BuildArch: noarch
+ExclusiveArch: %{ix86} x86_64
 
 %description nonlinux
 All the SYSLINUX binaries that run from the firmware rather than from a
 linux host. It also includes a tool, MEMDISK, which loads legacy operating
-systems from media. 
+systems from media.
 %endif
 
 %prep
@@ -111,6 +112,8 @@ export CFLAGS
 # If you make clean here, we lose the provided syslinux.exe
 find . -name '*.exe' | cpio -H newc --quiet -o -F %{_tmppath}/%{name}-%{version}-%{release}.cpio
 make clean
+# There's an x86_64 image here that shouldn't be, and it makes i686 builds fail.
+rm -vf diag/geodsp/mk-lba-img
 make all
 make installer
 make -C sample tidy
@@ -127,7 +130,7 @@ make install-all \
 	INSTALLROOT=%{buildroot} BINDIR=%{_bindir} SBINDIR=%{_sbindir} \
        	LIBDIR=%{_prefix}/lib DATADIR=%{_datadir} \
 	MANDIR=%{_mandir} INCDIR=%{_includedir} \
-	TFTPBOOT=/tftpboot EXTLINUXDIR=/boot/extlinux
+	TFTPBOOT=/var/lib/tftpboot EXTLINUXDIR=/boot/extlinux
 
 mkdir -p %{buildroot}/%{_docdir}/%{name}-%{version}/sample
 install -m 644 sample/sample.* %{buildroot}/%{_docdir}/%{name}-%{version}/sample/
@@ -159,6 +162,8 @@ rm -rf %{buildroot}
 %dir %{_datadir}/syslinux
 %dir %{_datadir}/syslinux/dosutil
 %{_datadir}/syslinux/dosutil/*
+%dir %{_datadir}/syslinux/diag
+%{_datadir}/syslinux/diag/*
 
 %files perl
 %defattr(-,root,root)
@@ -186,9 +191,9 @@ rm -rf %{buildroot}
 %{_sbindir}/extlinux
 %config /etc/extlinux.conf
 
-%files tftpboot
 %ifarch %{ix86}
-/tftpboot
+%files tftpboot
+%{_sharedstatedir}/tftpboot
 
 %files nonlinux
 %{_datadir}/syslinux/memdisk
@@ -209,7 +214,7 @@ rm -rf %{buildroot}
 %exclude %{_datadir}/syslinux/*.bin
 %exclude %{_datadir}/syslinux/*.0
 %exclude /boot/extlinux
-%exclude /tftpboot
+%exclude %{_sharedstatedir}/tftpboot
 %endif
 
 %post extlinux
@@ -224,38 +229,31 @@ elif [ -f /boot/extlinux.conf ]; then \
 fi
 
 %changelog
-* Tue Apr 08 2014 Peter Jones <pjones@redhat.com> - 4.02-16
-- Make upgrades of syslinux-tftpboot work on x86_64.
-  Resolves: rhbz#1084547
+* Fri Jun 20 2014 Peter Jones <pjones@redhat.com> - 4.04-3
+- Correctly use /var/lib/tftpboot instead of /tftpboot
+  Resolves: rhbz#989867
 
-* Mon Apr 07 2014 Peter Jones <pjones@redhat.com> - 4.02-15
-- Fix requires for syslinux-extlinux -> syslinux-extlinux-nonlinux.
-  Related: rhbz#1084547
+* Thu May 08 2014 Peter Jones <pjones@redhat.com> - 4.04-2
+- Make the subpackages noarch, not i686, so rel-eng doesn't have to fight
+  it to get working dependency resolution.
+  Related: rhbz#980671
 
-* Mon Apr 07 2014 Peter Jones <pjones@redhat.com> - 4.02-14
-- Typo in -13.  This day has gone on too long.
-  Related: rhbz#1084547
-
-* Mon Apr 07 2014 Peter Jones <pjones@redhat.com> - 4.02-13
-- Make memdisk part of syslinux-nonlinux.
-  Related: rhbz#1084547
-
-* Mon Apr 07 2014 Peter Jones <pjones@redhat.com> - 4.02-12
-- Make multilib work right with 4.02-10's changes.
-  Related: rhbz#1084547
+* Thu May 08 2014 Peter Jones <pjones@redhat.com> - 4.04-1
+- Rebase to 4.04
+  Resolves: rhbz#970946
 
 * Mon Apr 07 2014 Peter Jones <pjones@redhat.com> - 4.02-11
 - Fix it harder.  Again.
-  Related: rhbz#1084547
+  Resolves: rhbz#1084547
 
 * Thu Apr 03 2014 Peter Jones <pjones@redhat.com> - 4.02-10
 - Actually build the part of the code 4.02-9 was supposed to address.
-  Related: rhbz#980671
+  Resolves: rhbz#980671
 
 * Mon Feb 10 2014 Peter Jones <pjones@redhat.com> - 4.02-9
 - Avoid a workaround that causes machines to stall in PXE boots that
   use the local disk.
-  Resolves: rhbz#980671
+  ResolveS:rhbz#980671
 
 * Mon Oct 15 2012 Peter Jones <pjones@redhat.com> - 4.02-8
 - Fix bugs found by coverity scan.

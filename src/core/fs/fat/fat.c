@@ -254,8 +254,10 @@ static void vfat_mangle_name(char *dst, const char *src)
     while (1) {
         if (dst == p)
             break;
-		if (*(dst-1) == '/' && dst-1 == p) /* it's the '/' case */
-			break;
+	if (*(dst-1) == '/' && dst-1 == p) /* it's the '/' case */
+		break;
+	if (dst-2 == p && *(dst-2) == '.' && *(dst-1) == '.' )	/* the '..' case */
+		break;
         if ((*(dst-1) != '/') && (*(dst-1) != '.'))
             break;
 
@@ -592,7 +594,7 @@ static int vfat_readdir(struct file *file, struct dirent *dirent)
     char filename[261];
     int name_len = 0;
 
-    uint8_t vfat_init, vfat_next, vfat_csum;
+    uint8_t vfat_next, vfat_csum;
     uint8_t id;
     int entries_left;
     bool long_entry = false;
@@ -619,13 +621,11 @@ static int vfat_readdir(struct file *file, struct dirent *dirent)
 		id = long_de->id;
 
 		if (id & 0x40) {
-		    /* init vfat_csum and vfat_init */
+		    /* init vfat_csum */
 		    vfat_csum = long_de->checksum;
 		    id &= 0x3f;
 		    if (id >= 20)
 			goto invalid; /* Too long! */
-
-		    vfat_init = id;
 
 		    /* ZERO the long_name buffer */
 		    memset(long_name, 0, sizeof long_name);

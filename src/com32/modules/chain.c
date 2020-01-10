@@ -1,7 +1,7 @@
 /* ----------------------------------------------------------------------- *
  *
  *   Copyright 2003-2009 H. Peter Anvin - All Rights Reserved
- *   Copyright 2009-2010 Intel Corporation; author: H. Peter Anvin
+ *   Copyright 2009-2011 Intel Corporation; author: H. Peter Anvin
  *   Significant portions copyright (C) 2010 Shao Miller
  *					[partition iteration, GPT, "fs"]
  *
@@ -76,6 +76,10 @@
  *	equivalent to seg=0x70 file=<loader> sethidden,
  *	used with DOS' io.sys.
  *
+ * drmk=<loader>
+ *	Similar to msdos=<loader> but prepares the special options
+ *	for the Dell Real Mode Kernel.
+ *
  * grub=<loader>
  *	same as seg=0x800 file=<loader> & jumping to seg 0x820,
  *	used with GRUB Legacy stage2 files.
@@ -133,6 +137,7 @@ static struct options {
     bool swap;
     bool hide;
     bool sethidden;
+    bool drmk;
 } opt;
 
 struct data_area {
@@ -265,23 +270,21 @@ static void *read_sectors(uint64_t lba, uint8_t count)
 	    if (lba)
 		return NULL;	/* Can only read MBR */
 
-	    s = 1;
-	    h = 0;
-	    c = 0;
+	    s = h = c = 0;
 	} else {
-	    s = (lba % disk_info.sect) + 1;
+	    s = lba % disk_info.sect;
 	    t = lba / disk_info.sect;	/* Track = head*cyl */
 	    h = t % disk_info.head;
 	    c = t / disk_info.head;
 	}
 
-	if (s > 63 || h > 256 || c > 1023)
+	if (s >= 63 || h >= 256 || c >= 1024)
 	    return NULL;
 
 	inreg.eax.b[0] = count;
 	inreg.eax.b[1] = 0x02;	/* Read */
-	inreg.ecx.b[1] = c & 0xff;
-	inreg.ecx.b[0] = s + (c >> 6);
+	inreg.ecx.b[1] = c;
+	inreg.ecx.b[0] = ((c & 0x300) >> 2) | (s+1);
 	inreg.edx.b[1] = h;
 	inreg.edx.b[0] = disk_info.disk;
 	inreg.ebx.w[0] = OFFS(buf);
@@ -326,22 +329,20 @@ static int write_sector(unsigned int lba, const void *data)
 	    if (lba)
 		return -1;	/* Can only write MBR */
 
-	    s = 1;
-	    h = 0;
-	    c = 0;
+	    s = h = c = 0;
 	} else {
-	    s = (lba % disk_info.sect) + 1;
+	    s = lba % disk_info.sect;
 	    t = lba / disk_info.sect;	/* Track = head*cyl */
 	    h = t % disk_info.head;
 	    c = t / disk_info.head;
 	}
 
-	if (s > 63 || h > 256 || c > 1023)
+	if (s >= 63 || h >= 256 || c >= 1024)
 	    return -1;
 
 	inreg.eax.w[0] = 0x0301;	/* Write one sector */
-	inreg.ecx.b[1] = c & 0xff;
-	inreg.ecx.b[0] = s + (c >> 6);
+	inreg.ecx.b[1] = c;
+	inreg.ecx.b[0] = ((c & 0x300) >> 2) | (s+1);
 	inreg.edx.b[1] = h;
 	inreg.edx.b[0] = disk_info.disk;
 	inreg.ebx.w[0] = OFFS(buf);
@@ -624,8 +625,8 @@ static struct disk_part_iter *next_mbr_part(struct disk_part_iter *part)
 
     /* Update parameters to reflect this new partition.  Re-use iterator */
     part->lba_data = table[part->private.mbr_index].start_lba;
-    dprintf("Partition %d primary lba %u\n", part->index, part->lba_data);
-    part->index++;
+    dprintf("Partition %d primary lba %u\n", part->private.mbr_index, part->lba_data);
+    part->index = part->private.mbr_index + 1;
     part->record = table + part->private.mbr_index;
     return part;
 
@@ -869,7 +870,7 @@ static struct disk_part_iter *next_gpt_part(struct disk_part_iter *part)
     part->private.gpt.part_guid = &gpt_part->uid;
     part->private.gpt.part_label = gpt_part->name;
     /* Update our index */
-    part->index++;
+    part->index = part->private.gpt.index + 1;
     gpt_part_dump(gpt_part);
 
     /* In a GPT scheme, we re-use the iterator */
@@ -987,7 +988,7 @@ static int find_by_guid(const struct guid *gpt_guid,
 #if DEBUG
 	gpt_dump(header);
 #endif
-	is_me = !memcmp(&header->disk_guid, &gpt_guid, sizeof(*gpt_guid));
+	is_me = !memcmp(&header->disk_guid, gpt_guid, sizeof(*gpt_guid));
 	free(header);
 	if (!is_me) {
 	    /* Check for a matching partition */
@@ -1281,6 +1282,7 @@ Options: file=<loader>      Load and execute file, instead of boot sector\n\
          freedos=<loader>   Load FreeDOS KERNEL.SYS\n\
          msdos=<loader>     Load MS-DOS IO.SYS\n\
          pcdos=<loader>     Load PC-DOS IBMBIO.COM\n\
+         drmk=<loader>      Load DRMK DELLBIO.BIN\n\
          grub=<loader>      Load GRUB Legacy stage2\n\
          grubcfg=<filename> Set alternative config filename for GRUB Legacy\n\
          grldr=<loader>     Load GRUB4DOS grldr\n\
@@ -1351,6 +1353,11 @@ int main(int argc, char *argv[])
 	    opt.seg = 0x70;	/* MS-DOS 2.0+ wants this address */
 	    opt.loadfile = argv[i] + 6;
 	    opt.sethidden = true;
+	} else if (!strncmp(argv[i], "drmk=", 5)) {
+	    opt.seg = 0x70;	/* DRMK wants this address */
+	    opt.loadfile = argv[i] + 5;
+	    opt.sethidden = true;
+	    opt.drmk = true;
 	} else if (!strncmp(argv[i], "grub=", 5)) {
 	    opt.seg = 0x800;	/* stage2 wants this address */
 	    opt.loadfile = argv[i] + 5;
@@ -1380,6 +1387,8 @@ int main(int argc, char *argv[])
 		   || !strncmp(argv[i], "mbr=", 4)
 		   || !strncmp(argv[i], "guid:", 5)
 		   || !strncmp(argv[i], "guid=", 5)
+		   || !strncmp(argv[i], "uuid:", 5)
+		   || !strncmp(argv[i], "uuid=", 5)
 		   || !strncmp(argv[i], "label:", 6)
 		   || !strncmp(argv[i], "label=", 6)
 		   || !strcmp(argv[i], "boot")
@@ -1418,7 +1427,8 @@ int main(int argc, char *argv[])
 	    error("Unable to find requested MBR signature\n");
 	    goto bail;
 	}
-    } else if (!strncmp(drivename, "guid", 4)) {
+    } else if (!strncmp(drivename, "guid", 4) ||
+	       !strncmp(drivename, "uuid", 4)) {
 	if (str_to_guid(drivename + 5, &gpt_guid))
 	    goto bail;
 	drive = find_by_guid(&gpt_guid, &cur_part);
@@ -1695,6 +1705,40 @@ int main(int argc, char *argv[])
 
 		strcpy((char *)stage2->config_file, opt.grubcfg);
 	    }
+	}
+
+	if (opt.drmk) {
+	    /* DRMK entry is different than MS-DOS/PC-DOS */
+	    /*
+	     * A new size, aligned to 16 bytes to ease use of ds:[bp+28].
+	     * We only really need 4 new, usable bytes at the end.
+	     */
+	    int tsize = (data[ndata].size + 19) & 0xfffffff0;
+	    const union syslinux_derivative_info *sdi;
+
+	    sdi = syslinux_derivative_info();
+	    /* We should lookup the Syslinux partition offset and use it */
+	    fs_lba = *sdi->disk.partoffset;
+	    /*
+	     * fs_lba should be verified against the disk as some DRMK
+	     * variants will check and fail if it does not match
+	     */
+	    dprintf("  fs_lba offset is %d\n", fs_lba);
+	    /* DRMK only uses a DWORD */
+	    if (fs_lba > 0xffffffff) {
+		error("LBA very large; Only using lower 32 bits; DRMK will probably fail\n");
+	    }
+	    regs.ss = regs.fs = regs.gs = 0;	/* Used before initialized */
+	    if (!realloc(data[ndata].data, tsize)) {
+		error("Failed to realloc for DRMK\n");
+		goto bail;	/* We'll never make it */
+	    }
+	    data[ndata].size = tsize;
+	    /* ds:bp is assumed by DRMK to be the boot sector */
+	    /* offset 28 is the FAT HiddenSectors value */
+	    regs.ds = (tsize >> 4) + (opt.seg - 2);
+	    /* "Patch" into tail of the new space */
+	    *(int *)(data[ndata].data + tsize - 4) = (int)(fs_lba & 0xffffffff);
 	}
 
 	ndata++;

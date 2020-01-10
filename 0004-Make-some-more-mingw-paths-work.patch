@@ -1,0 +1,40 @@
+From 9336f2aff579aa591b75bb4be59451d4b3dd283f Mon Sep 17 00:00:00 2001
+From: Peter Jones <pjones@redhat.com>
+Date: Mon, 7 Apr 2014 09:57:17 -0400
+Subject: [PATCH 4/4] Make some more mingw paths work.
+
+---
+ win32/find-mingw32.sh | 4 +++-
+ win64/find-mingw64.sh | 1 +
+ 2 files changed, 4 insertions(+), 1 deletion(-)
+
+diff --git a/win32/find-mingw32.sh b/win32/find-mingw32.sh
+index f79949c..ed8408f 100755
+--- a/win32/find-mingw32.sh
++++ b/win32/find-mingw32.sh
+@@ -20,7 +20,9 @@ for prefix in \
+     i386-mingw32msvc- \
+     i486-mingw32msvc- \
+     i586-mingw32msvc- \
+-    i686-mingw32msvc-; do
++    i686-mingw32msvc- \
++    i686-w64-mingw32- \
++    ; do
+     if "${prefix}${cc}" -v > /dev/null 2>&1; then
+ 	echo "$prefix"
+ 	exit 0
+diff --git a/win64/find-mingw64.sh b/win64/find-mingw64.sh
+index c45db56..4c2cce2 100755
+--- a/win64/find-mingw64.sh
++++ b/win64/find-mingw64.sh
+@@ -20,6 +20,7 @@ for prefix in \
+     amd64-mingw64msvc- \
+     amd64-mingw32- \
+     amd64-mingw32msvc- \
++    x86_64-w64-mingw32- \
+     ; do
+     if "${prefix}${cc}" -v > /dev/null 2>&1; then
+ 	echo "$prefix"
+-- 
+1.9.0
+

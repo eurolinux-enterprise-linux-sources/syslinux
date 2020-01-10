@@ -27,52 +27,6 @@ static inline struct iso_sb_info *ISO_SB(struct fs_info *fs)
     return fs->fs_info;
 }
 
-/*
- * Mangle a filename pointed to by src into a buffer pointed
- * to by dst; ends on encountering any whitespace.
- * dst is preserved.
- *
- * This verifies that a filename is < FilENAME_MAX characters,
- * doesn't contain whitespace, zero-pads the output buffer,
- * and removes trailing dots and redumndant slashes, so "repe
- * cmpsb" can do a compare, and the path-searching routine gets
- * a bit of an easier job.
- *
- */
-static void iso_mangle_name(char *dst, const char *src)
-{
-    char *p = dst;
-    int i = FILENAME_MAX - 1;
-
-    while (not_whitespace(*src)) {
-        if ( *src == '/' ) {
-            if ( *(src+1) == '/' ) {
-                i--;
-                src++;
-                continue;
-            }
-        }
-
-        *dst++ = *src ++;
-        i--;
-    }
-
-    while ( 1 ) {
-        if ( dst == p )
-            break;
-
-        if ( (*(dst-1) != '.') && (*(dst-1) != '/') )
-            break;
-
-        dst --;
-        i ++;
-    }
-
-    i ++;
-    for (; i > 0; i -- )
-        *dst++ = '\0';
-}
-
 static size_t iso_convert_name(char *dst, const char *src, int len)
 {
     char *p = dst;
@@ -116,9 +70,10 @@ static bool iso_compare_name(const char *de_name, size_t len,
     char iso_file_name[256];
     char *p = iso_file_name;
     char c1, c2;
-    size_t i;
+    int i;
     
     i = iso_convert_name(iso_file_name, de_name, len);
+    (void)i;
     dprintf("Compare: \"%s\" to \"%s\" (len %zu)\n",
 	    file_name, iso_file_name, i);
 
@@ -337,7 +292,7 @@ const struct fs_ops iso_fs_ops = {
     .searchdir     = NULL, 
     .getfssec      = generic_getfssec,
     .close_file    = generic_close_file,
-    .mangle_name   = iso_mangle_name,
+    .mangle_name   = generic_mangle_name,
     .load_config   = iso_load_config,
     .iget_root     = iso_iget_root,
     .iget          = iso_iget,
