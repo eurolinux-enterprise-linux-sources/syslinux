@@ -2,13 +2,14 @@ Summary: Simple kernel loader which boots from a FAT filesystem
 Name: syslinux
 Version: 4.02
 %define tarball_version 4.02
-Release: 7%{?dist}
+Release: 8%{?dist}
 License: GPLv2+
 Group: Applications/System
 URL: http://syslinux.zytor.com/wiki/index.php/The_Syslinux_Project
 Source0: http://www.kernel.org/pub/linux/utils/boot/syslinux/%{name}-%{tarball_version}.tar.bz2
 Patch0: syslinux-debuginfo.patch
 Patch1: syslinux-4.02-fix-isohybrid-seek-error.patch
+Patch2: syslinux-4.02-coverity.patch
 ExclusiveArch: %{ix86} x86_64
 Buildroot: %{_tmppath}/%{name}-%{version}-%{release}-root-%(%{__id_u} -n)
 BuildRequires: nasm >= 0.98.38-1, perl, netpbm-progs, git
@@ -174,6 +175,10 @@ elif [ -f /boot/extlinux.conf ]; then \
 fi
 
 %changelog
+* Mon Oct 15 2012 Peter Jones <pjones@redhat.com> - 4.02-8
+- Fix bugs found by coverity scan.
+  Resolves: rhbz#812034
+
 * Wed Mar 28 2012 Peter Jones <pjones@redhat.com> - 4.02-7
 - Fix libuuid dependency.
   Related: rhbz#806464
