@@ -2,12 +2,12 @@ Summary: Simple kernel loader which boots from a FAT filesystem
 Name: syslinux
 Version: 4.05
 %define tarball_version 4.05
-Release: 5%{?dist}
+Release: 8%{?dist}
 License: GPLv2+
 Group: Applications/System
 URL: http://syslinux.zytor.com/wiki/index.php/The_Syslinux_Project
 Source0: http://www.kernel.org/pub/linux/utils/boot/syslinux/%{name}-%{tarball_version}.tar.bz2
-ExclusiveArch: %{ix86} x86_64
+ExclusiveArch: x86_64
 Buildroot: %{_tmppath}/%{name}-%{version}-%{release}-root-%(%{__id_u} -n)
 BuildRequires: nasm >= 0.98.38-1, perl, netpbm-progs
 BuildRequires: /usr/include/gnu/stubs-32.h
@@ -21,6 +21,7 @@ Requires: mtools, libc.so.6()(64bit)
 
 Patch1: syslinux-isohybrid-fix-mbr.patch
 Patch2: syslinux-4.05-avoid-ext2_fs.h.patch
+Patch3: syslinux-4.05-man-pages.patch
 
 # NOTE: extlinux belongs in /sbin, not in /usr/sbin, since it is typically
 # a system bootloader, and may be necessary for system recovery.
@@ -69,6 +70,7 @@ booting in the /tftpboot directory.
 
 %patch1 -p1 -b .isohyb
 %patch2 -p1 -b .ext2
+%patch3 -p1 -b .man-pages
 
 %build
 CFLAGS="-Werror -Wno-unused -finline-limit=2000"
@@ -109,8 +111,9 @@ rm -rf %{buildroot}
 %doc doc/* 
 %doc sample
 %{_mandir}/man1/gethostip*
+%{_mandir}/man1/isohybrid*
+%{_mandir}/man1/memdiskfind*
 %{_mandir}/man1/syslinux*
-%{_mandir}/man1/extlinux*
 %{_bindir}/gethostip
 %{_bindir}/isohybrid
 %{_bindir}/memdiskfind
@@ -148,6 +151,7 @@ rm -rf %{buildroot}
 
 %files extlinux
 %{_sbindir}/extlinux
+%{_mandir}/man1/extlinux*
 /boot/extlinux
 %config /etc/extlinux.conf
 
@@ -166,6 +170,17 @@ elif [ -f /boot/extlinux.conf ]; then \
 fi
 
 %changelog
+* Thu Feb 27 2014 David Cantrell <dcantrell@redhat.com> - 4.05-8
+- Only build for x86_64
+  Resolves: rhbz#1070659
+
+* Mon Jan 20 2014 Peter Jones <pjones@redhat.com> - 4.05-7
+- Improve documentation.
+  Resolves: rhbz#948852
+
+* Fri Dec 27 2013 Daniel Mach <dmach@redhat.com> - 4.05-6
+- Mass rebuild 2013-12-27
+
 * Fri Feb 15 2013 Fedora Release Engineering <rel-eng@lists.fedoraproject.org> - 4.05-5
 - Rebuilt for https://fedoraproject.org/wiki/Fedora_19_Mass_Rebuild
 

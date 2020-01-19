@@ -1,0 +1,112 @@
+diff -urpN syslinux-4.05/libinstaller/syslxopt.c.options syslinux-4.05/libinstaller/syslxopt.c
+--- syslinux-4.05/libinstaller/syslxopt.c.options	2014-01-20 14:02:01.634201156 -0500
++++ syslinux-4.05/libinstaller/syslxopt.c	2014-01-20 14:09:39.303778826 -0500
+@@ -102,11 +102,11 @@ void __attribute__ ((noreturn)) usage(in
+     fprintf(stderr,
+ 	    "  --install    -i  Install over the current bootsector\n"
+ 	    "  --update     -U  Update a previous installation\n"
+-	    "  --zip        -z  Force zipdrive geometry (-H 64 -S 32)\n"
++	    "  --zipdrive   -z  Force zipdrive geometry (-H 64 -S 32)\n"
+ 	    "  --sectors=#  -S  Force the number of sectors per track\n"
+ 	    "  --heads=#    -H  Force number of heads\n"
+ 	    "  --stupid     -s  Slow, safe and stupid mode\n"
+-	    "  --raid       -r  Fall back to the next device on boot failure\n"
++	    "  --raid-mode  -r  Fall back to the next device on boot failure\n"
+ 	    "  --once=...   %s  Execute a command once upon boot\n"
+ 	    "  --clear-once -O  Clear the boot-once command\n"
+ 	    "  --reset-adv      Reset auxilliary data\n",
+diff -urpN syslinux-4.05/man/isohybrid.1.options syslinux-4.05/man/isohybrid.1
+--- syslinux-4.05/man/isohybrid.1.options	2014-01-20 14:10:08.950685806 -0500
++++ syslinux-4.05/man/isohybrid.1	2014-01-20 14:10:01.468709289 -0500
+@@ -0,0 +1,61 @@
++.TH isohybrid 1 "17 Jan 2014" "isohybrid"
++.SH "NAME"
++isohybrid \(em Post-process an ISO 9660 image generated with mkisofs or
++genisoimage to allow hybrid booting as a CD-ROM or as a hard disk.
++.SH "SYNOPSIS"
++.B isohybrid
++[\fBOPTIONS\fP]
++.I <boot.iso>
++.SH "DESCRIPTION"
++.PP
++The \fBisohybrid\fR utility modifies a an ISO 9660 image generated with
++mkisofs, genisoimage, or compatible utilities, to be bootable as a CD-ROM or
++as a hard disk.
++.SH "OPTIONS"
++.TP
++\fB-h\fR \fI<X>\fR\fN
++.br
++Number of default geometry heads
++.TP
++\fB-s\fR \fI<X>\fR
++.br
++Number of default geometry sectors
++.TP
++\fB-e\fR \fI<X>\fR, \fB--entry\fR \fI<X>\fR
++Specify parititon entry number (1-4)
++.TP
++\fB-o\fR \fI<X>\fR, \fB--offset\fR \fI<X>\fR
++.br
++Specify partition offset (default 0)
++.TP
++\fB-t\fR \fI<X>\fR, \fB--type\fR \fI<X>\fR
++.br
++Specify MBR ID (default random)
++.TP
++\fB-u\fR, \fB--uefi\fB
++Build EFI bootable image
++.TP
++\fB-m\fR, \fB--mac\fB
++Add Apple File Protocol partition table support
++.TP
++\fB--forcehd0\fR
++Assume we are laoded as disk ID 0
++.TP
++\fB--ctrlhd0\fR
++Assume disk ID 0 if the Ctrl key is pressed
++.TP
++\fB--partok\fR
++Allow booting from within a partition
++.TP
++\fB-?\fR, \fB--help\fR
++Display help
++.TP
++\fB-v\fR, \fB--verbose\fR
++Display verbose output
++.TP
++\fB-V\fR, \fB--version\fR
++Display version information
++
++.SH "SEE ALSO"
++.PP
++\fBmkisofs\fR(1)
+diff -urpN syslinux-4.05/man/memdiskfind.1.options syslinux-4.05/man/memdiskfind.1
+--- syslinux-4.05/man/memdiskfind.1.options	2014-01-20 14:10:30.474618196 -0500
++++ syslinux-4.05/man/memdiskfind.1	2014-01-20 14:10:26.087632002 -0500
+@@ -0,0 +1,10 @@
++.TH memdiskfind 1 "17 Jan 2014" "memdiskfind"
++.SH "NAME"
++memdiskfind \(em Simple utility to find a resident \fBmemdisk\fR instance.
++.SH "SYNOPSIS"
++.B memdiskfind
++.SH "DESCRIPTION"
++.PP
++The \fBmemdiskfind\fR utility searches memory for a \fBmemdisk\fR instance,
++and, if found, outputs the parameters needed to use the \fphram\fR driver in
++Linux to map it.
+diff -urpN syslinux-4.05/man/syslinux.1.options syslinux-4.05/man/syslinux.1
+--- syslinux-4.05/man/syslinux.1.options	2014-01-20 14:01:00.005389882 -0500
++++ syslinux-4.05/man/syslinux.1	2014-01-20 14:09:41.886770720 -0500
+@@ -83,6 +83,12 @@ Override the detected number of sectors
+ .TP
+ \fB\-z\fP, \fB\-\-zipdrive\fP
+ Assume zipdrive geometry (\fI\-\-heads 64 \-\-sectors 32).
++.TP
++\fB\-\-reset\-adv\fP
++Reset auxilliary data.
++.TP
++\fB\-M\fP, \fB\-\-menu\-save\fP
++Set the label to select as default on the next boot.
+ .SH FILES
+ .SS "Configuration file"
+ All the configurable defaults in \s-1SYSLINUX\s+1 can be changed by putting a
