@@ -1,13 +1,15 @@
-From: Matthew Garrett <mjg@redhat.com>
+commit 4816be5c3bf49ae235baa71c512b4a1705a980f8
+Author: Matthew Garrett <mjg@redhat.com>
 Date:   Wed Feb 15 12:05:29 2012 -0500
-Subject: isohybrid: Generate MBR even when in EFI mode
 
-Various EFI systems insist that there be no active flag in the pMBR in
-order to parse the GPT. The only way around this is to also generate a
-valid MBR - the firmware will then pick that up and use the system
-partition provided there. In order to deal with other EFI "sanity" checks,
-the partition type for the non-EFI partitions is set to 0 to skip the
-firmware bailing because of overlapping partitions.
+    isohybrid: Generate MBR even when in EFI mode
+    
+    Various EFI systems insist that there be no active flag in the pMBR in
+    order to parse the GPT. The only way around this is to also generate a
+    valid MBR - the firmware will then pick that up and use the system
+    partition provided there. In order to deal with other EFI "sanity" checks,
+    the partition type for the non-EFI partitions is set to 0 to skip the
+    firmware bailing because of overlapping partitions.
 
 diff --git a/utils/isohybrid.c b/utils/isohybrid.c
 index 1dcbaa1..ac04bfd 100644
