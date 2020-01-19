@@ -1,0 +1,265 @@
+From a3655b7bf64b7e016602d0b2bec450d27575816e Mon Sep 17 00:00:00 2001
+From: Peter Jones <pjones@redhat.com>
+Date: Mon, 15 Oct 2012 13:12:53 -0400
+Subject: [PATCH 3/4] Fixes for problems discovered by coverity scan.
+
+Related: rhbz#1085434
+
+Signed-off-by: Peter Jones <pjones@fedoraproject.org>
+---
+ extlinux/main.c         |  9 ++++++++-
+ libfat/fat.h            |  9 +++++++--
+ libinstaller/advio.c    | 17 +++++++++--------
+ libinstaller/syslxcom.c |  8 ++++++++
+ libinstaller/syslxint.h | 10 +++++++---
+ linux/syslinux.c        |  3 ---
+ mtools/syslinux.c       |  1 +
+ utils/Makefile          |  2 +-
+ utils/isohybrid.c       | 20 ++++++++++++++------
+ 9 files changed, 55 insertions(+), 24 deletions(-)
+
+diff --git a/extlinux/main.c b/extlinux/main.c
+index e574051..a461533 100755
+--- a/extlinux/main.c
++++ b/extlinux/main.c
+@@ -292,7 +292,12 @@ int patch_file_and_bootblock(int fd, const char *dir, int devfd)
+     nsect = (boot_image_len + SECTOR_SIZE - 1) >> SECTOR_SHIFT;
+     nsect += 2;			/* Two sectors for the ADV */
+     sectp = alloca(sizeof(sector_t) * nsect);
+-    if (fs_type == EXT2 || fs_type == VFAT) {
++    if (sectp == NULL) {
++	perror("alloca");
++	exit(1);
++    }
++    memset(sectp, '\0', sizeof(sector_t) * nsect);
++    if (fd >= 0 && (fs_type == EXT2 || fs_type == VFAT)) {
+ 	if (sectmap(fd, sectp, nsect)) {
+ 		perror("bmap");
+ 		exit(1);
+@@ -423,6 +428,8 @@ int ext2_fat_install_file(const char *path, int devfd, struct stat *rst)
+ 
+     /* Map the file, and patch the initial sector accordingly */
+     modbytes = patch_file_and_bootblock(fd, path, devfd);
++    if (modbytes < 0)
++	goto bail;
+ 
+     /* Write the patch area again - this relies on the file being
+        overwritten in place! */
+diff --git a/libfat/fat.h b/libfat/fat.h
+index b4e32f7..acafdb6 100644
+--- a/libfat/fat.h
++++ b/libfat/fat.h
+@@ -23,8 +23,13 @@
+ 
+ /* The poor excuse FAT has for a superblock -- in the boot sector */
+ struct fat_bootsect {
+-    le8_t bsJump[3];		/* Jump to code */
+-    char bsOemName[8];		/* Formatting program */
++    union {
++	struct {
++	    uint8_t bsJump[3];	/* Jump to code */
++	    char bsOemName[8];	/* Formatting program */
++	};
++	uint8_t bsHead[11];
++    };
+     le16_t bsBytesPerSec;	/* Bytes/sector */
+     le8_t bsSecPerClust;	/* Sectors/cluster */
+     le16_t bsResSectors;	/* Reserved sectors */
+diff --git a/libinstaller/advio.c b/libinstaller/advio.c
+index 56f607d..01894f2 100644
+--- a/libinstaller/advio.c
++++ b/libinstaller/advio.c
+@@ -135,15 +135,16 @@ int write_adv(const char *path, const char *cfg)
+ 		       xst.st_dev != st.st_dev || xst.st_size != st.st_size) {
+ 		fprintf(stderr, "%s: race condition on write\n", file);
+ 		err = -2;
++	    } else {
++		/* Write our own version ... */
++		if (xpwrite(fd, syslinux_adv, 2 * ADV_SIZE,
++			    st.st_size - 2 * ADV_SIZE) != 2 * ADV_SIZE) {
++		    err = -1;
++		}
++
++		sync();
++		set_attributes(fd);
+ 	    }
+-	    /* Write our own version ... */
+-	    if (xpwrite(fd, syslinux_adv, 2 * ADV_SIZE,
+-			st.st_size - 2 * ADV_SIZE) != 2 * ADV_SIZE) {
+-		err = -1;
+-	    }
+-
+-	    sync();
+-	    set_attributes(fd);
+ 	}
+     }
+ 
+diff --git a/libinstaller/syslxcom.c b/libinstaller/syslxcom.c
+index a6a8339..dae81bc 100644
+--- a/libinstaller/syslxcom.c
++++ b/libinstaller/syslxcom.c
+@@ -87,6 +87,9 @@ ssize_t xpwrite(int fd, const void *buf, size_t count, off_t offset)
+     ssize_t rv;
+     ssize_t done = 0;
+ 
++    if (fd < 0)
++	die(strerror(EBADF));
++
+     while (count) {
+ 	rv = pwrite(fd, bufp, count, offset);
+ 	if (rv == 0) {
+@@ -279,6 +282,11 @@ static int sectmap_fib(int fd, sector_t *sectors, int nsectors)
+  */
+ int sectmap(int fd, sector_t *sectors, int nsectors)
+ {
++    if (fd < 0) {
++	errno = EBADF;
++	return -1;
++    }
++
+     if (!sectmap_fie(fd, sectors, nsectors))
+ 	return 0;
+ 
+diff --git a/libinstaller/syslxint.h b/libinstaller/syslxint.h
+index 7c9da51..8d39f74 100644
+--- a/libinstaller/syslxint.h
++++ b/libinstaller/syslxint.h
+@@ -193,8 +193,13 @@ struct syslinux_extent {
+ 
+ /* FAT bootsector format, also used by other disk-based derivatives */
+ struct boot_sector {
+-    uint8_t bsJump[3];
+-    char bsOemName[8];
++    union {
++	struct {
++	    uint8_t bsJump[3];
++	    char bsOemName[8];
++	};
++	uint8_t bsHead[11];
++    };
+     uint16_t bsBytesPerSec;
+     uint8_t bsSecPerClust;
+     uint16_t bsResSectors;
+@@ -241,7 +246,6 @@ struct boot_sector {
+     uint16_t bsSignature;
+ } __attribute__ ((packed));
+ 
+-#define bsHead      bsJump
+ #define bsHeadLen   offsetof(struct boot_sector, bsBytesPerSec)
+ #define bsCode	    bs32.Code	/* The common safe choice */
+ #define bsCodeLen   (offsetof(struct boot_sector, bsSignature) - \
+diff --git a/linux/syslinux.c b/linux/syslinux.c
+index c7a9ecc..6e23a7a 100755
+--- a/linux/syslinux.c
++++ b/linux/syslinux.c
+@@ -335,9 +335,6 @@ int main(int argc, char *argv[])
+ 	    snprintf(mntname, sizeof mntname, "syslinux.mnt.%lu.%d",
+ 		     (unsigned long)mypid, i);
+ 
+-	    if (lstat(mntname, &dst) != -1 || errno != ENOENT)
+-		continue;
+-
+ 	    rv = mkdir(mntname, 0000);
+ 
+ 	    if (rv == -1) {
+diff --git a/mtools/syslinux.c b/mtools/syslinux.c
+index ac189c6..4bec0e3 100755
+--- a/mtools/syslinux.c
++++ b/mtools/syslinux.c
+@@ -208,6 +208,7 @@ int main(int argc, char *argv[])
+ 	!mtools_conf)
+ 	die_err(tmpdir);
+ 
++    umask(077);
+     mtc_fd = mkstemp(mtools_conf);
+     if (mtc_fd < 0 || !(mtc = fdopen(mtc_fd, "w")))
+ 	die_err(mtools_conf);
+diff --git a/utils/Makefile b/utils/Makefile
+index 44cb54f..4fabe04 100644
+--- a/utils/Makefile
++++ b/utils/Makefile
+@@ -51,7 +51,7 @@ isohdpfx.c: $(ISOHDPFX) isohdpfxarray.pl
+ 	$(PERL) isohdpfxarray.pl $(ISOHDPFX) > $@
+ 
+ isohybrid: isohybrid.o isohdpfx.o
+-	$(CC) $(LDFLAGS) -luuid -o $@ $^
++	$(CC) $(LDFLAGS) -fshort-wchar -luuid -o $@ $^
+ 
+ gethostip: gethostip.o
+ 	$(CC) $(LDFLAGS) -o $@ $^
+diff --git a/utils/isohybrid.c b/utils/isohybrid.c
+index ac04bfd..865c114 100644
+--- a/utils/isohybrid.c
++++ b/utils/isohybrid.c
+@@ -357,6 +357,8 @@ check_option(int argc, char *argv[])
+         case ':':
+             errx(1, "option `-%c' takes an argument", optopt);
+ 
++            printh();
++            exit(0);
+         default:
+         case '?':
+             if (optopt)
+@@ -618,7 +620,7 @@ initialise_mbr(uint8_t *mbr)
+     bsect = (offset % sector) + 1;
+     bcyle = offset / (head * sector);
+ 
+-    bsect += (bcyle & 0x300) >> 2;
++    bsect += bcyle >> 2;
+     bcyle  &= 0xFF;
+ 
+     ehead = head - 1;
+@@ -792,7 +794,7 @@ initialise_gpt(uint8_t *gpt, uint32_t current, uint32_t alternate, int primary)
+     memcpy(part->partTypeGUID, basic_partition, sizeof(uuid_t));
+     part->firstLBA = lendian_64(0);
+     part->lastLBA = lendian_64(psize);
+-    memcpy(part->name, "ISOHybrid ISO", 28);
++    memcpy(part->name, L"ISOHybrid ISO", 28);
+ 
+     gpt += sizeof(struct gpt_part_header);
+     part++;
+@@ -801,7 +803,7 @@ initialise_gpt(uint8_t *gpt, uint32_t current, uint32_t alternate, int primary)
+     memcpy(part->partTypeGUID, basic_partition, sizeof(uuid_t));
+     part->firstLBA = lendian_64(efi_lba * 4);
+     part->lastLBA = lendian_64(part->firstLBA + efi_count - 1);
+-    memcpy(part->name, "ISOHybrid", 20);
++    memcpy(part->name, L"ISOHybrid", 20);
+ 
+     gpt += sizeof(struct gpt_part_header);
+ 
+@@ -814,7 +816,7 @@ initialise_gpt(uint8_t *gpt, uint32_t current, uint32_t alternate, int primary)
+ 	memcpy(part->partTypeGUID, hfs_partition, sizeof(uuid_t));
+ 	part->firstLBA = lendian_64(mac_lba * 4);
+ 	part->lastLBA = lendian_64(part->firstLBA + mac_count - 1);
+-	memcpy(part->name, "ISOHybrid", 20);
++	memcpy(part->name, L"ISOHybrid", 20);
+ 
+ 	part--;
+     }
+@@ -891,7 +893,11 @@ main(int argc, char *argv[])
+     size_t orig_gpt_size, free_space, gpt_size;
+     struct iso_primary_descriptor descriptor;
+ 
+-    prog = strcpy(alloca(strlen(argv[0]) + 1), argv[0]);
++    prog = alloca(strlen(argv[0]) + 1);
++    if (!prog)
++	err(1, "");
++    strcpy(prog, argv[0]);
++
+     i = check_option(argc, argv);
+     argc -= i;
+     argv += i;
+@@ -1097,7 +1103,9 @@ main(int argc, char *argv[])
+ 
+ 	initialise_apm(buf, APM_OFFSET);
+ 
+-	fseek(fp, APM_OFFSET, SEEK_SET);
++	if (fseek(fp, APM_OFFSET, SEEK_SET))
++	    err(1, "%s: seek error - 7", argv[0]);
++
+ 	fwrite(buf, sizeof(char), apm_size, fp);
+     }
+ 
+-- 
+1.9.3
+

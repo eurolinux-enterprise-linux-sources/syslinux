@@ -1,0 +1,43 @@
+From 942cc3fcfb310754009dbd36c7c9c059c3f3f24b Mon Sep 17 00:00:00 2001
+From: Peter Jones <pjones@redhat.com>
+Date: Tue, 23 Sep 2014 13:31:46 -0400
+Subject: [PATCH] Don't use strict aliasing, because not everything here is
+ ready for it.
+
+Related: rhbz#1085434
+
+Signed-off-by: Peter Jones <nobody@example.com>
+---
+ gpxe/src/Makefile | 2 +-
+ mk/build.mk       | 2 +-
+ 2 files changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/gpxe/src/Makefile b/gpxe/src/Makefile
+index cc91d78..2e8ff1e 100644
+--- a/gpxe/src/Makefile
++++ b/gpxe/src/Makefile
+@@ -4,7 +4,7 @@
+ #
+ 
+ CLEANUP		:=
+-CFLAGS		:=
++CFLAGS		:= -fno-strict-aliasing
+ ASFLAGS		:=
+ LDFLAGS		:=
+ MAKEDEPS	:= Makefile
+diff --git a/mk/build.mk b/mk/build.mk
+index 0ca82be..15c5ee5 100644
+--- a/mk/build.mk
++++ b/mk/build.mk
+@@ -19,7 +19,7 @@ include $(MAKEDIR)/syslinux.mk
+ OPTFLAGS   = -g -Os
+ INCLUDES   =
+ CFLAGS     = -W -Wall -Wno-sign-compare -D_FILE_OFFSET_BITS=64 \
+-             $(OPTFLAGS) $(INCLUDES)
++             $(OPTFLAGS) $(INCLUDES) -fno-strict-aliasing
+ LDFLAGS    =
+ LIBS	   =
+ 
+-- 
+1.9.3
+
