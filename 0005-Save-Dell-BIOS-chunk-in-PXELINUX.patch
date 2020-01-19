@@ -1,0 +1,88 @@
+From e1db3e675ae4ccbeea5de9f4b74a618e42eac1a3 Mon Sep 17 00:00:00 2001
+From: Nick Bertrand <nick@physics.umn.edu>
+Date: Tue, 31 Jul 2012 19:00:05 -0700
+Subject: [PATCH] Save Dell BIOS chunk in PXELINUX
+
+Our site has many Dell OptiPlex 790s, all of which are unable to use the
+'localboot' PXELINUX option as they either hang at 'Booting from local disk...'
+or immediately reboot depending on which SYSLINUX version is used. Many people
+have suggested using chain.c32 to chain load the local disk as a workaround,
+but this causes problems with Windows 7 BitLocker as it detects the chain load
+and forces the user to enter the recovery key. While searching for another
+option I determined that the problem seems to stem from the BIOS storing some
+information in the memory range 0x47CC-0x47FF, which is overwritten when
+PXELINUX loads. I couldn't figure out a clean way to avoid that memory region
+as it falls in the middle of the 4.x bss16 region, so I decided to create a
+copy of it instead. By copying that information out of the way during PXELINUX
+initialization and copying it back before returning control via 'localboot 0',
+the computer successfully boots to the local disk.
+
+Some additional info:
+
+BIOS revision: A13
+PXE versions: Intel Boot Agent GE v1.3.81, Intel Boot Agent PXE Base Code (PXE-2.1 build 089)
+Versions of SYSLINUX affected: 3.83, 4.03, 4.04, 4.05, possibly others
+Resulting symptom for localboot option vs SYSLINUX version:
+
+      localboot 0  localboot -1
+3.83  Reboot       Reboot
+4.03  Reboot       Reboot
+4.04  Hang         Reboot
+4.05  Hang         Reboot
+
+This patch does not fix the reboot issue when using 'localboot -1'. I believe
+this patch should also help those with OptiPlex 990s, but I don't have one to
+test with to confirm.
+
+Below is a patch against commit 0a0e0e41cad93cd16c323cf16f40264a21eedd6c of
+the git.kernel.org/pub/scm/boot/syslinux/syslinux.git repository.
+
+--
+---
+ core/pxelinux.asm | 18 ++++++++++++++++++
+ 1 file changed, 18 insertions(+)
+
+diff --git a/core/pxelinux.asm b/core/pxelinux.asm
+index e8818a6..b58ed2a 100644
+--- a/core/pxelinux.asm
++++ b/core/pxelinux.asm
+@@ -132,6 +132,13 @@ _start1:
+ 		mov ds,ax
+ 		mov es,ax
+ 
++		; Copy chunk of memory used by Dell BIOS on OptiPlex 790s
++		; Allows control to return to PXE Boot Agent for localboot
++		mov esi,47cch
++		mov edi,DellBIOSChunk
++		mov ecx,13
++		rep movsd
++
+ %if 0 ; debugging code only... not intended for production use
+ 		; Clobber the stack segment, to test for specific pathologies
+ 		mov di,STACK_BASE
+@@ -289,6 +296,14 @@ local_boot:
+ 		; Restore the environment we were called with
+ 		pm_call reset_pxe
+ 		call cleanup_hardware
++
++		; Copy Dell BIOS chunk back into place
++		cld
++		mov esi,DellBIOSChunk
++		mov edi,47cch
++		mov ecx,13
++		rep movsd
++
+ 		lss sp,[InitStack]
+ 		pop gs
+ 		pop fs
+@@ -564,3 +579,6 @@ IPInfo:
+ .ServerIP	resd 1
+ .GatewayIP	resd 1
+ .Netmask	resd 1
++
++		section .earlybss
++DellBIOSChunk   resd 13     ; 52 bytes to store Dell BIOS chunk
+-- 
+2.5.0
+
+

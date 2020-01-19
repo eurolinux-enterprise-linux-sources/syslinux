@@ -2,7 +2,7 @@ Summary: Simple kernel loader which boots from a FAT filesystem
 Name: syslinux
 Version: 4.05
 %define tarball_version 4.05
-Release: 12%{?dist}
+Release: 13%{?dist}
 License: GPLv2+
 Group: Applications/System
 URL: http://syslinux.zytor.com/wiki/index.php/The_Syslinux_Project
@@ -24,6 +24,7 @@ Patch0006: 0003-Fixes-for-problems-discovered-by-coverity-scan.-8120.patch
 Patch0007: 0004-Make-some-more-mingw-paths-work.patch
 Patch0008: 0001-Don-t-use-strict-aliasing-because-not-everything-her.patch
 Patch0009: 0001-relocs-Move-stop-to-the-end.patch
+Patch0010: 0005-Save-Dell-BIOS-chunk-in-PXELINUX.patch
 
 %description
 SYSLINUX is a suite of bootloaders, currently supporting DOS FAT
@@ -184,6 +185,10 @@ elif [ -f /boot/extlinux.conf ]; then \
 fi
 
 %changelog
+* Tue May 10 2016 Peter Jones <pjones@redhat.com> - - 4.05-13
+- Try to work around firmware bugs in the PXE stack.
+  Resolves: rhbz#1254615
+
 * Fri Sep 26 2014 Peter Jones <pjones@redhat.com> - 4.05-12
 - Toolchain changes between when this originally got built and 4.05-9 means
   4.05-9 - 4.05-11 don't actually work.
