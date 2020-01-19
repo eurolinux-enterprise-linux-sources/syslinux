@@ -2,7 +2,7 @@ Summary: Simple kernel loader which boots from a FAT filesystem
 Name: syslinux
 Version: 4.05
 %define tarball_version 4.05
-Release: 13%{?dist}
+Release: 15%{?dist}
 License: GPLv2+
 Group: Applications/System
 URL: http://syslinux.zytor.com/wiki/index.php/The_Syslinux_Project
@@ -57,8 +57,7 @@ Headers and libraries for syslinux development.
 %package tftpboot
 Summary: SYSLINUX modules in /var/lib/tftpboot, available for network booting
 Group: Applications/Internet
-ExclusiveArch: x86_64
-Requires: syslinux
+BuildArch: noarch
 
 %description tftpboot
 All the SYSLINUX/PXELINUX modules directly available for network
@@ -185,6 +184,14 @@ elif [ -f /boot/extlinux.conf ]; then \
 fi
 
 %changelog
+* Thu Sep 20 2018 Javier Martinez Canillas <javierm@redhat.com> - 4.05-15
+- Drop x86_64 ExclusiveArch for tftpboot subpackage.
+  Resolves: rhbz#1588578
+
+* Wed Sep 12 2018 Javier Martinez Canillas <javierm@redhat.com> - 4.05-14
+- Make tftpboot package noarch
+  Resolves: rhbz#1588578
+
 * Tue May 10 2016 Peter Jones <pjones@redhat.com> - - 4.05-13
 - Try to work around firmware bugs in the PXE stack.
   Resolves: rhbz#1254615
